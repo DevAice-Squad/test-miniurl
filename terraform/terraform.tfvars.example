@@ -1,0 +1,21 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "miniurl"
+environment  = "prod"
+
+# Container Configuration
+container_port   = 5000
+container_cpu    = 256
+container_memory = 512
+desired_count    = 1
+
+# Network Configuration
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+
+# Domain Configuration (Optional)
+domain_name     = ""  # e.g., "miniurl.yourdomain.com"
+certificate_arn = ""  # ACM certificate ARN
+enable_https    = false 
