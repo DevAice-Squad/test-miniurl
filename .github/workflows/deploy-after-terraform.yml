@@ -1,0 +1,221 @@
+name: Deploy Application (After Terraform)
+
+on:
+  workflow_run:
+    workflows: ["Terraform Infrastructure (Simple)"]
+    types:
+      - completed
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: miniurl
+  ECS_SERVICE: miniurl-service
+  ECS_CLUSTER: miniurl-cluster
+  ECS_TASK_DEFINITION: miniurl-task
+  CONTAINER_PORT: 3000
+
+jobs:
+  deploy-app:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    # Only run if the terraform workflow completed successfully
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Verify infrastructure exists
+      run: |
+        echo "🔍 Verifying AWS infrastructure exists..."
+        
+        # Check if ECS cluster exists
+        if aws ecs describe-clusters --clusters $ECS_CLUSTER --query 'clusters[0].status' --output text | grep -q "ACTIVE"; then
+          echo "✅ ECS cluster '$ECS_CLUSTER' is active"
+        else
+          echo "❌ ECS cluster '$ECS_CLUSTER' not found or not active"
+          exit 1
+        fi
+        
+        # Check if ECR repository exists
+        if aws ecr describe-repositories --repository-names $ECR_REPOSITORY >/dev/null 2>&1; then
+          echo "✅ ECR repository '$ECR_REPOSITORY' exists"
+        else
+          echo "❌ ECR repository '$ECR_REPOSITORY' not found"
+          exit 1
+        fi
+        
+        echo "🎉 Infrastructure verification completed successfully"
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        echo "🐳 Building Docker image..."
+        
+        docker buildx build \
+          --platform linux/amd64 \
+          --push \
+          --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+          .
+        
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "✅ Docker image built and pushed successfully"
+
+    - name: Check if ECS service exists
+      id: check-service
+      run: |
+        echo "🔍 Checking if ECS service exists..."
+        if aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_SERVICE --query 'services[0].status' --output text 2>/dev/null | grep -q "ACTIVE"; then
+          echo "✅ ECS service '$ECS_SERVICE' exists and is active"
+          echo "service_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "⚠️ ECS service '$ECS_SERVICE' does not exist yet"
+          echo "service_exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download current task definition
+      if: steps.check-service.outputs.service_exists == 'true'
+      run: |
+        echo "📥 Downloading current ECS task definition..."
+        aws ecs describe-task-definition \
+          --task-definition $ECS_TASK_DEFINITION \
+          --query taskDefinition > task-definition.json
+        echo "✅ Task definition downloaded"
+
+    - name: Create initial task definition
+      if: steps.check-service.outputs.service_exists == 'false'
+      run: |
+        echo "📝 Creating initial task definition..."
+        cat > task-definition.json << EOF
+        {
+          "family": "$ECS_TASK_DEFINITION",
+          "taskRoleArn": "",
+          "executionRoleArn": "",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "containerDefinitions": [
+            {
+              "name": "$ECR_REPOSITORY",
+              "image": "placeholder",
+              "portMappings": [
+                {
+                  "containerPort": 3000,
+                  "protocol": "tcp"
+                }
+              ],
+              "essential": true,
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/miniurl",
+                  "awslogs-region": "$AWS_REGION",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ]
+        }
+        EOF
+        echo "✅ Initial task definition created"
+
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition.json
+        container-name: ${{ env.ECR_REPOSITORY }}
+        image: ${{ steps.build-image.outputs.image }}
+
+    - name: Deploy Amazon ECS task definition
+      if: steps.check-service.outputs.service_exists == 'true'
+      id: deploy-ecs
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
+        force-new-deployment: true
+      continue-on-error: true
+
+    - name: Handle ECS deployment failure
+      if: steps.check-service.outputs.service_exists == 'true' && steps.deploy-ecs.outcome == 'failure'
+      run: |
+        echo "⚠️ ECS deployment failed, attempting force update..."
+        aws ecs update-service \
+          --cluster $ECS_CLUSTER \
+          --service $ECS_SERVICE \
+          --force-new-deployment \
+          --task-definition $(aws ecs describe-task-definitions --task-definition $ECS_TASK_DEFINITION --query 'taskDefinition.taskDefinitionArn' --output text)
+        
+        echo "Waiting for service to stabilize..."
+        aws ecs wait services-stable \
+          --cluster $ECS_CLUSTER \
+          --services $ECS_SERVICE
+
+    - name: Register new task definition
+      if: steps.check-service.outputs.service_exists == 'false'
+      run: |
+        echo "📝 Registering new task definition..."
+        aws ecs register-task-definition \
+          --cli-input-json file://${{ steps.task-def.outputs.task-definition }}
+        echo "✅ Task definition registered"
+
+    - name: Verify deployment
+      run: |
+        if [ "${{ steps.check-service.outputs.service_exists }}" == "true" ]; then
+          echo "⏳ Waiting for service to be stable..."
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE
+          
+          echo "📊 Getting service status..."
+          aws ecs describe-services \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE \
+            --query 'services[0].{TaskDefinition:taskDefinition,RunningCount:runningCount,PendingCount:pendingCount,DesiredCount:desiredCount}'
+          
+          echo "✅ Application deployment completed successfully"
+        else
+          echo "ℹ️ Service deployment will be handled by Terraform on next apply"
+        fi
+
+    - name: Get Application URL
+      run: |
+        echo "🌐 Getting application URL..."
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names miniurl-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text 2>/dev/null || echo "")
+        
+        if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+          echo "🎉 Application URL: http://$ALB_DNS"
+          echo "📊 Health Check: http://$ALB_DNS/health"
+        else
+          echo "⚠️ Load balancer not found. Infrastructure may still be deploying."
+        fi 

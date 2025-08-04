@@ -1,0 +1,164 @@
+Create a professional URL shortener web application called "MinURL" with the following specifications:
+
+**Project Structure:**
+- Full-stack application with separate backend and frontend directories
+- Backend: Node.js/Express with TypeScript support
+- Frontend: React with TypeScript
+- Database: PostgreSQL with Sequelize ORM
+
+**Core Features:**
+1. **URL Shortening Service:**
+   - Multiple shortening algorithms (Hash, UUID, Custom)
+   - Custom short URLs with 6-8 character codes
+   - URL validation and metadata extraction
+   - Bulk URL shortening capability
+   - URL expiration dates
+
+2. **User Authentication System:**
+   - JWT-based authentication with bcrypt password hashing
+   - User registration and login
+   - Role-based access control (user/admin)
+   - Profile management with password change
+   - Protected routes and middleware
+
+3. **Analytics & Tracking:**
+   - Comprehensive click tracking (IP, user agent, referrer)
+   - Geographic data (country, city)
+   - Device information (browser, OS, device type)
+   - Time-based analytics
+   - Real-time dashboard with statistics
+
+4. **Admin Panel:**
+   - User management (CRUD operations)
+   - URL management and monitoring
+   - System-wide analytics and reporting
+   - Dashboard with real-time insights
+
+5. **Developer API (v1):**
+   - RESTful API with versioning
+   - Bulk operations support
+   - API documentation endpoint
+   - Rate limiting and usage statistics
+   - Algorithm selection endpoint
+
+**Technical Stack:**
+
+**Backend Requirements:**
+- Express.js with TypeScript configuration
+- PostgreSQL database with Sequelize ORM
+- JWT authentication with proper middleware
+- Security: Helmet, CORS, CSRF protection, rate limiting
+- Input validation and sanitization
+- Comprehensive error handling
+
+**Frontend Requirements:**
+- React 18 with TypeScript
+- Tailwind CSS for styling
+- React Router v6 for navigation
+- React Hook Form for form handling
+- React Query for server state management
+- Context API for global state
+- Responsive design
+
+**Database Schema:**
+1. **Users Table:**
+   - id, username (unique), email (unique), password_hash, role, isActive, timestamps
+
+2. **URLs Table:**
+   - id, original_url, short_url (unique), user_id (FK), title, description, is_active, expires_at, timestamps
+
+3. **Clicks Table:**
+   - id, url_id (FK), ip_address, user_agent, referer, country, city, browser, os, device_type, date_time
+
+**API Endpoints:**
+
+**Authentication Routes (/auth):**
+- POST /register, /login
+- GET /profile
+- PUT /profile, /change-password
+
+**URL Routes (/urls):**
+- POST /shorten
+- GET /:shortCode (redirect)
+- GET /user/urls
+- GET /analytics/:id
+- PUT /:id, DELETE /:id
+
+**Admin Routes (/admin):**
+- GET /users, /urls
+- POST /users
+- PUT /users/:id
+- DELETE /users/:id
+- GET /analytics/dashboard
+
+**API Routes (/api/v1):**
+- POST /shorten, /shorten/bulk
+- GET /url/:shortCode
+- POST /validate
+- GET /algorithms, /stats
+
+**Security Features:**
+- bcrypt password hashing with salt rounds
+- JWT token authentication
+- CSRF protection middleware
+- Rate limiting per IP address
+- Input validation and sanitization
+- Security headers with Helmet.js
+- CORS configuration
+
+**Environment Configuration:**
+- Backend: DB config, JWT secrets, server port, frontend URL, app domain
+- Frontend: API base URL configuration
+- Development and production environment support
+
+**File Structure:**
+```
+minurl-app/
+├── backend/
+│   ├── config/database.js
+│   ├── middleware/auth.js, security.js
+│   ├── models/User.js, Url.js, Click.js, index.js
+│   ├── routes/auth.js, urls.js, admin.js, api.js
+│   ├── services/urlService.js
+│   ├── server.js
+│   ├── package.json
+│   └── env.example
+├── frontend/
+│   ├── src/
+│   │   ├── components/Layout.tsx, LoadingSpinner.tsx
+│   │   ├── contexts/AuthContext.tsx
+│   │   ├── pages/HomePage.tsx, LoginPage.tsx, RegisterPage.tsx, DashboardPage.tsx, UrlsPage.tsx, AnalyticsPage.tsx, ProfilePage.tsx, NotFoundPage.tsx
+│   │   ├── pages/admin/AdminDashboard.tsx, AdminUsers.tsx, AdminUrls.tsx
+│   │   ├── services/api.ts
+│   │   ├── types/index.ts
+│   │   ├── App.tsx, index.tsx, index.css
+│   │   └── ...
+│   ├── public/index.html
+│   ├── package.json
+│   ├── tailwind.config.js
+│   └── tsconfig.json
+├── package.json (root)
+└── README.md
+```
+
+**Additional Features:**
+- Loading spinners and error handling
+- Form validation with proper error messages
+- Copy-to-clipboard functionality
+- Social sharing capabilities
+- Responsive mobile design
+- Development scripts for both frontend and backend
+- Production build configuration
+- Comprehensive README with setup instructions
+
+**Deployment Configuration:**
+- Production environment variables
+- Build scripts for frontend
+- Docker deployment example
+- Database migration scripts
+
+**Domain Configuration:**
+- Short URL domain: mini.cloudrakshak.com
+- Full URL format with domain integration
+
+Generate complete, production-ready code with proper TypeScript types, error handling, validation, security measures, and a polished user interface. Include all package.json files with proper dependencies and scripts.git 

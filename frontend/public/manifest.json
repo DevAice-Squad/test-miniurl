@@ -1,0 +1,10 @@
+{
+  "short_name": "MiniURL",
+  "name": "MiniURL - URL Shortener",
+  "description": "A modern URL shortener application",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#3b82f6",
+  "background_color": "#ffffff"
+} 
