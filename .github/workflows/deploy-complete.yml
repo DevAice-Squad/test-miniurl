@@ -171,8 +171,8 @@ jobs:
           echo "✅ Build successful with original Dockerfile"
         else
           echo "⚠️ Original Dockerfile failed, trying simplified version..."
-          mv Dockerfile Dockerfile.original
-          mv Dockerfile.simple Dockerfile
+          #mv Dockerfile Dockerfile.original
+          #mv Dockerfile.simple Dockerfile
           #docker buildx build \
           #  --platform linux/amd64 \
           #  --push \
