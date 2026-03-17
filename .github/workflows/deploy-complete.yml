@@ -179,7 +179,18 @@ jobs:
         
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
         echo "✅ Docker image built and pushed successfully"
-
+        
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@0.35.0
+      with:
+          image-ref: "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          skip-files: 'usr/local/bin/aws-parameter-store-reader'
+          
     - name: Download current task definition
       run: |
         echo "📥 Downloading current ECS task definition..."
