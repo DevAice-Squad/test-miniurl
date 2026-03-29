@@ -1,4 +1,4 @@
-# MiniURL - URL Shortener Application
+# MiniURL - URL Shortener Application -Test
 
 A modern, full-stack URL shortener application built with React TypeScript frontend and Node.js backend, designed for AWS Fargate deployment.
 
